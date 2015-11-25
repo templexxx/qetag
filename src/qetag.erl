@@ -33,6 +33,7 @@ etag_middle_file(Filename, Fsize) ->
             get_rawblock_sha1_list(Filename,
                 lists:seq(0, Num_blocks), <<>>))])).
 
+
 get_rawblock_sha1_list(_, [], Raw_BIN) ->
     Raw_BIN;
 get_rawblock_sha1_list(Filename, [H|T], Raw_bin) ->
