@@ -58,8 +58,7 @@ etag_big(Filename, Fsize) ->
                                     lists:sort(
                                         sha1_list(Filename, Num_thread, Num_blocks_in_rawblock)), <<>>),
             Second_part_sha1 = combine_sha1(
-                                    lists:sort(
-                                        sha1_list_last(Filename, Num_blocks_in_lastsize, Start)), <<>>),
+                                    lists:sort(sha1_list_last(Filename, Num_blocks_in_lastsize, Start)), <<>>),
                 urlsafe_base64_encode(erlang:iolist_to_binary([<<150>>,
                     crypto:hash(sha,
                         erlang:iolist_to_binary([First_part_sha1, Second_part_sha1]))]))
@@ -82,11 +81,12 @@ get_num_thread(Fsize) ->
 
 sha1_list(Filename, Num_thread, Num_blocks_in_rawblock) ->
     up_map(fun (Off) ->
-        SHA1_maps_rawblock_init = maps:new(),
+        %%SHA1_maps_rawblock_init = maps:new(),
         Read_start = Off * (Num_blocks_in_rawblock + 1),
         Read_off = Read_start + Num_blocks_in_rawblock,
         SHA1_list_rawblock = get_rawblock_sha1_list(Filename, lists:seq(Read_start, Read_off), <<>>),
-        maps:put(Off, SHA1_list_rawblock, SHA1_maps_rawblock_init)
+        %%maps:put(Off, SHA1_list_rawblock, SHA1_maps_rawblock_init)
+        [{Off, SHA1_list_rawblock}]
            end, lists:seq(0, Num_thread)).
 
 
@@ -94,27 +94,31 @@ up_map(F, L) ->
     Parent = self(),
     Ref = make_ref(),
     [receive {Ref, Result} ->
-        SHA1_maps = maps:new(),
-        maps:merge(SHA1_maps, Result)
+        Result ++ []
+        %%SHA1_maps = maps:new(),
+        %%maps:merge(SHA1_maps, Result)
      end
         || _ <- [spawn(fun() -> Parent ! {Ref, F(X)} end) || X <- L]].
 
 
 sha1_list_last(Filename, Num_thread, Start)->
     up_map(fun (Off)->
-      SHA1_maps_init = maps:new(),
+      %%SHA1_maps_init = maps:new(),
       {ok, Fd} = file:open(Filename, [raw, binary]),
       {ok, Fd_bs} = file:pread(Fd, (Off + Start) * ?BLOCK_SIZE, ?BLOCK_SIZE),
       SHA1 = crypto:hash(sha, Fd_bs),
       file:close(Fd),
-      maps:put(Off, SHA1, SHA1_maps_init)
+      [{Off, SHA1}]
+      %%maps:put(Off, SHA1, SHA1_maps_init)
     end, lists:seq(0, Num_thread)).
 
 
 combine_sha1([], SHA1_BIN) ->
     SHA1_BIN;
 combine_sha1([H|T], SHA1_bin) ->
-    SHA1_BIN = erlang:iolist_to_binary([SHA1_bin,maps:values(H)]),
+    [{_, RAW_sha1}] = H,
+    SHA1_BIN = erlang:iolist_to_binary([SHA1_bin,RAW_sha1]),
+    %%SHA1_BIN = erlang:iolist_to_binary([SHA1_bin,maps:values(H)]),
     combine_sha1(T, SHA1_BIN).
 
 urlsafe_base64_encode(Data) ->
