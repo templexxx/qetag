@@ -48,12 +48,18 @@ etag_big(Filename, Fsize) ->
     {Num_thread,  Num_blocks_in_rawblock, Num_blocks_in_lastsize, Start} = get_num_thread(Fsize),
     if
         Num_blocks_in_lastsize == 0 ->
-            First_part_sha1 = combine_sha1(lists:sort(sha1_list(Filename, Num_thread, Num_blocks_in_rawblock)), <<>>),
+            First_part_sha1 = combine_sha1(
+                                    lists:sort(
+                                        sha1_list(Filename, Num_thread, Num_blocks_in_rawblock)), <<>>),
                 urlsafe_base64_encode(erlang:iolist_to_binary([<<150>>,
                     crypto:hash(sha, First_part_sha1)]));
         true ->
-            First_part_sha1 = combine_sha1(lists:sort(sha1_list(Filename, Num_thread, Num_blocks_in_rawblock)), <<>>),
-            Second_part_sha1 = combine_sha1(lists:sort(sha1_list_last(Filename, Num_blocks_in_lastsize, Start)), <<>>),
+            First_part_sha1 = combine_sha1(
+                                    lists:sort(
+                                        sha1_list(Filename, Num_thread, Num_blocks_in_rawblock)), <<>>),
+            Second_part_sha1 = combine_sha1(
+                                    lists:sort(
+                                        sha1_list_last(Filename, Num_blocks_in_lastsize, Start)), <<>>),
                 urlsafe_base64_encode(erlang:iolist_to_binary([<<150>>,
                     crypto:hash(sha,
                         erlang:iolist_to_binary([First_part_sha1, Second_part_sha1]))]))
