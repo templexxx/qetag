@@ -3,13 +3,13 @@
 
 -compile(export_all).
 
--define(BLOCK_SIZE, 4194304).
+%%-define(BLOCK_SIZE, 4194304).
 
 etag_file(Filename) ->
     {ok, FInfo} = file:read_file_info(Filename),
     Fsize = FInfo#file_info.size,
     if
-        Fsize > ?BLOCK_SIZE ->
+        Fsize > 4194304 ->
             etag_big(Filename, Fsize);
         true -> erlang:display([hehe])
     end.
@@ -25,7 +25,7 @@ etag_small_file(File_path) ->
 
 
 etag_middle_file(Filename, Fsize) ->
-    Num_blocks = Fsize div ?BLOCK_SIZE,
+    Num_blocks = Fsize div 4194304,
     urlsafe_base64_encode
     (erlang:iolist_to_binary
     ([<<150>>,
@@ -38,7 +38,7 @@ get_rawblock_sha1_list(_, [], Raw_BIN) ->
     Raw_BIN;
 get_rawblock_sha1_list(Filename, [H|T], Raw_bin) ->
     {ok, Fd} = file:open(Filename, [raw, binary]),
-    {ok, Fd_bs} = file:pread(Fd,  H * ?BLOCK_SIZE, ?BLOCK_SIZE),
+    {ok, Fd_bs} = file:pread(Fd,  H * 4194304, 4194304),
     Raw_BIN = erlang:iolist_to_binary([Raw_bin, crypto:hash(sha, Fd_bs)]),
     file:close(Fd),
     get_rawblock_sha1_list(Filename,  T, Raw_BIN).
@@ -67,12 +67,12 @@ etag_big(Filename, Fsize) ->
 
 get_num_thread(Fsize) ->
     PoolSize = erlang:system_info(thread_pool_size),
-    Num_blocks_in_rawblock = Fsize div ?BLOCK_SIZE div PoolSize,
-    Onetime_size = PoolSize * ?BLOCK_SIZE * Num_blocks_in_rawblock,
+    Num_blocks_in_rawblock = Fsize div 4194304 div PoolSize,
+    Onetime_size = PoolSize * 4194304 * Num_blocks_in_rawblock,
     Last_size = Fsize - Onetime_size,
-    Num_blocks_in_lastsize = Last_size div ?BLOCK_SIZE,
+    Num_blocks_in_lastsize = Last_size div 4194304,
     if
-        Fsize / ?BLOCK_SIZE == Fsize div ?BLOCK_SIZE ->
+        Fsize / 4194304 == Fsize div 4194304 ->
             {PoolSize - 1,  Num_blocks_in_rawblock - 1, Num_blocks_in_lastsize - 1, Num_blocks_in_rawblock * PoolSize};
         true ->
             {PoolSize - 1,  Num_blocks_in_rawblock - 1, Num_blocks_in_lastsize, Num_blocks_in_rawblock * PoolSize}
@@ -105,7 +105,7 @@ sha1_list_last(Filename, Num_thread, Start)->
     up_map(fun (Off)->
       %%SHA1_maps_init = maps:new(),
       {ok, Fd} = file:open(Filename, [raw, binary]),
-      {ok, Fd_bs} = file:pread(Fd, (Off + Start) * ?BLOCK_SIZE, ?BLOCK_SIZE),
+      {ok, Fd_bs} = file:pread(Fd, (Off + Start) * 4194304, 4194304),
       SHA1 = crypto:hash(sha, Fd_bs),
       file:close(Fd),
       [{Off, SHA1}]
