@@ -53,7 +53,7 @@ etag_big(Filename, Fsize) ->
                     crypto:hash(sha, First_part_sha1)]));
         true ->
             First_part_sha1 = combine_sha1(lists:sort(sha1_list(Filename, Num_thread, Num_blocks_in_rawblock)), <<>>),
-            Second_part_sha1 = get_rawblock_sha1_list(Filename, lists:seq(Start, Start + Num_blocks_in_lastsize), <<>>),
+            Second_part_sha1 = combine_sha1(lists:sort(sha1_list_last(Filename, Num_blocks_in_lastsize, Start)), <<>>),
                 urlsafe_base64_encode(erlang:iolist_to_binary([<<150>>,
                     crypto:hash(sha,
                         erlang:iolist_to_binary([First_part_sha1, Second_part_sha1]))]))
@@ -92,6 +92,17 @@ up_map(F, L) ->
         maps:merge(SHA1_maps, Result)
      end
         || _ <- [spawn(fun() -> Parent ! {Ref, F(X)} end) || X <- L]].
+
+
+sha1_list_last(Filename, Num_thread, Start)->
+    up_map(fun (Off)->
+      SHA1_maps_init = maps:new(),
+      {ok, Fd} = file:open(Filename, [raw, binary]),
+      {ok, Fd_bs} = file:pread(Fd, (Off + Start) * ?BLOCK_SIZE, ?BLOCK_SIZE),
+      SHA1 = crypto:hash(sha, Fd_bs),
+      file:close(Fd),
+      maps:put(Off, SHA1, SHA1_maps_init)
+    end, lists:seq(0, Num_thread)).
 
 
 combine_sha1([], SHA1_BIN) ->
