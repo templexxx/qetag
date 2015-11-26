@@ -1,6 +1,8 @@
 # qetag
 Qetag for Erlang
 
+Maybe it's the fastest qetag program in Qiniu
+
 https://github.com/qiniu/qetag
 
 核心数越多 跑的越快
