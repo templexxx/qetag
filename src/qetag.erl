@@ -24,16 +24,6 @@ etag_small_stream(Input_stream) ->
     urlsafe_base64_encode(erlang:iolist_to_binary([<<22>>, crypto:hash(sha, Input_stream)])).
 
 
-etag_middle_file(Filename, Fsize) ->
-    Num_blocks = Fsize div ?BLOCK_SIZE,
-    urlsafe_base64_encode
-    (erlang:iolist_to_binary
-    ([<<150>>,
-        crypto:hash(sha,
-            get_rawblock_sha1_list(Filename,
-                lists:seq(0, Num_blocks), <<>>))])).
-
-
 get_rawblock_sha1_list(_, [], Raw_BIN) ->
     Raw_BIN;
 get_rawblock_sha1_list(Filename, [H|T], Raw_bin) ->
