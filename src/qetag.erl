@@ -5,13 +5,15 @@
 
 -define(BLOCK_SIZE, 4194304).
 
-etag_file(Filename) ->
-    {ok, FInfo} = file:read_file_info(Filename),
+etag_file(FileName) ->
+    {ok, FInfo} = file:read_file_info(FileName),
     Fsize = FInfo#file_info.size,
     if
         Fsize > ?BLOCK_SIZE ->
-            etag_big(Filename, Fsize);
-        true -> etag_small_file(Filename)
+            {ok, File} = file:open(FileName, [read, binary]),
+            etag_big(File, Fsize),
+            file:close(File);
+        true -> etag_small_file(FileName)
     end.
 
 
@@ -24,29 +26,17 @@ etag_small_stream(Input_stream) ->
     urlsafe_base64_encode(erlang:iolist_to_binary([<<22>>, crypto:hash(sha, Input_stream)])).
 
 
-get_rawblock_sha1_list(_, [], Raw_BIN) ->
-    Raw_BIN;
-get_rawblock_sha1_list(Filename, [H|T], Raw_bin) ->
-    {ok, Fd} = file:open(Filename, [raw, binary]),
-    {ok, Fd_bs} = file:pread(Fd,  H * ?BLOCK_SIZE, ?BLOCK_SIZE),
-    Raw_BIN = erlang:iolist_to_binary([Raw_bin, crypto:hash(sha, Fd_bs)]),
-    file:close(Fd),
-    get_rawblock_sha1_list(Filename,  T, Raw_BIN).
-
-
-etag_big(Filename, Fsize) ->
+etag_big(File, Fsize) ->
     {Num_thread,  Num_blocks_in_rawblock, Num_blocks_in_lastsize, Start} = get_num_thread(Fsize),
+    First_part_sha1 = combine_sha1( <<>>,
+                                    lists:sort(sha1_list(File, Num_thread, Num_blocks_in_rawblock))),
     if
-        Num_blocks_in_lastsize == 0 ->
-            First_part_sha1 = combine_sha1( <<>>,
-                                            lists:sort(sha1_list(Filename, Num_thread, Num_blocks_in_rawblock))),
+        Num_blocks_in_lastsize == 0 ->            
             urlsafe_base64_encode(
                     erlang:iolist_to_binary([<<150>>, crypto:hash(sha, First_part_sha1)]));
         true ->
-            First_part_sha1 = combine_sha1( <<>>,
-                                            lists:sort(sha1_list(Filename, Num_thread, Num_blocks_in_rawblock))),
             Second_part_sha1 = combine_sha1(<<>>,
-                                            lists:sort(sha1_list_last(Filename, Num_blocks_in_lastsize, Start))),
+                                            lists:sort(sha1_list_last(File, Num_blocks_in_lastsize, Start))),
             urlsafe_base64_encode(
                 erlang:iolist_to_binary([<<150>>,
                                         crypto:hash(sha, erlang:iolist_to_binary([First_part_sha1, Second_part_sha1]))]))
@@ -67,23 +57,31 @@ get_num_thread(Fsize) ->
     end.
 
 
-sha1_list(Filename, Num_thread, Num_blocks_in_rawblock) ->
+
+sha1_list(File, Num_thread, Num_blocks_in_rawblock) ->
     upmap(fun (Off) ->
         Read_start = Off * (Num_blocks_in_rawblock + 1),
         Read_off = Read_start + Num_blocks_in_rawblock,
-        SHA1_list_rawblock = get_rawblock_sha1_list(Filename, lists:seq(Read_start, Read_off), <<>>),
+        SHA1_list_rawblock = get_rawblock_sha1_list(File, lists:seq(Read_start, Read_off), <<>>),
         [{Off, SHA1_list_rawblock}]
            end, lists:seq(0, Num_thread)).
 
 
-sha1_list_last(Filename, Num_thread, Start)->
+sha1_list_last(File, Num_thread, Start)->
     upmap(fun (Off)->
-        {ok, Fd} = file:open(Filename, [raw, binary]),
-        {ok, Fd_bs} = file:pread(Fd, (Off + Start) * ?BLOCK_SIZE, ?BLOCK_SIZE),
+        {ok, Fd_bs} = file:pread(File, (Off + Start) * ?BLOCK_SIZE, ?BLOCK_SIZE),
         SHA1 = crypto:hash(sha, Fd_bs),
-        file:close(Fd),
         [{Off, SHA1}]
            end, lists:seq(0, Num_thread)).
+
+
+get_rawblock_sha1_list(_, [], Raw_BIN) ->
+    Raw_BIN;
+get_rawblock_sha1_list(File, [H|T], Raw_bin) ->
+    {ok, Fd_bs} = file:pread(File,  H * ?BLOCK_SIZE, ?BLOCK_SIZE),
+    Raw_BIN = erlang:iolist_to_binary([Raw_bin, crypto:hash(sha, Fd_bs)]),
+    get_rawblock_sha1_list(File,  T, Raw_BIN).
+
 
 upmap(F, L) ->
     Parent = self(),
@@ -103,7 +101,3 @@ combine_sha1(SHA1_bin, [H|T]) ->
 
 urlsafe_base64_encode(Data) ->
     binary:bin_to_list(base64url:encode_mime(Data)).
-
-
-urlsafe_base64_decode(Data) ->
-    binary:bin_to_list(base64url:decode(Data)).
