@@ -10,12 +10,12 @@ etag_file(FileName) ->
     Fsize = FInfo#file_info.size,
     if
         Fsize > ?BLOCK_SIZE ->
-            {ok, File} = file:open(FileName, [read, binary]),
-            try
-                etag_big(File, Fsize)
-            after
-                file:close(File)
-            end;
+            %%{ok, File} = file:open(FileName, [raw, binary]),
+            %%try
+                etag_big(FileName, Fsize);
+            %%after
+               %% file:close(File)
+            %%end;
         true -> etag_small_file(FileName)
     end.
 
@@ -30,17 +30,17 @@ etag_small_stream(Input_stream) ->
         erlang:iolist_to_binary([<<22>>, crypto:hash(sha, Input_stream)]).
 
 
-etag_big(File, Fsize) ->
+etag_big(FileName, Fsize) ->
     {Num_thread,  Num_blocks_in_rawblock, Num_blocks_in_lastsize, Start} = get_num_thread(Fsize),
     First_part_sha1 = combine_sha1( <<>>,
-                                    lists:sort(sha1_list(File, Num_thread, Num_blocks_in_rawblock))),
+                                    lists:sort(sha1_list(FileName, Num_thread, Num_blocks_in_rawblock))),
     if
         Num_blocks_in_lastsize == 0 ->            
             %%urlsafe_base64_encode(
                     erlang:iolist_to_binary([<<150>>, crypto:hash(sha, First_part_sha1)]);
         true ->
             Second_part_sha1 = combine_sha1(<<>>,
-                                            lists:sort(sha1_list_last(File, Num_blocks_in_lastsize, Start))),
+                                            lists:sort(sha1_list_last(FileName, Num_blocks_in_lastsize, Start))),
             %%urlsafe_base64_encode(
                 erlang:iolist_to_binary([<<150>>,
                                         crypto:hash(sha, erlang:iolist_to_binary([First_part_sha1, Second_part_sha1]))])
@@ -62,31 +62,33 @@ get_num_thread(Fsize) ->
 
 
 
-sha1_list(File, Num_thread, Num_blocks_in_rawblock) ->
+sha1_list(FileName, Num_thread, Num_blocks_in_rawblock) ->
     upmap(fun (Off) ->
         Read_start = Off * (Num_blocks_in_rawblock + 1),
         Read_off = Read_start + Num_blocks_in_rawblock,
-        SHA1_list_rawblock = get_rawblock_sha1_list(File, lists:seq(Read_start, Read_off), <<>>),
+        SHA1_list_rawblock = get_rawblock_sha1_list(FileName, lists:seq(Read_start, Read_off), <<>>),
         [{Off, SHA1_list_rawblock}]
            end, lists:seq(0, Num_thread)).
 
 
-sha1_list_last(File, Num_thread, Start)->
+sha1_list_last(FileName, Num_thread, Start)->
     upmap(fun (Off)->
+        {ok, File} = file:open(FileName, [raw, binary]),
         {ok, Fd_bs} = file:pread(File, (Off + Start) * ?BLOCK_SIZE, ?BLOCK_SIZE),
         SHA1 = crypto:hash(sha, Fd_bs),
-        %%file:close(File),
+        file:close(File),
         [{Off, SHA1}]
            end, lists:seq(0, Num_thread)).
 
 
 get_rawblock_sha1_list(_, [], Raw_BIN) ->
     Raw_BIN;
-get_rawblock_sha1_list(File, [H|T], Raw_bin) ->
+get_rawblock_sha1_list(FileName, [H|T], Raw_bin) ->
+    {ok, File} = file:open(FileName, [read, binary]),
     {ok, Fd_bs} = file:pread(File,  H * ?BLOCK_SIZE, ?BLOCK_SIZE),
     Raw_BIN = erlang:iolist_to_binary([Raw_bin, crypto:hash(sha, Fd_bs)]),
-    %%file:close(File),
-    get_rawblock_sha1_list(File,  T, Raw_BIN).
+    file:close(File),
+    get_rawblock_sha1_list(FileName,  T, Raw_BIN).
 
 
 upmap(F, L) ->
