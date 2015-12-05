@@ -7,7 +7,9 @@ Maybe it's the fastest qetag program in Qiniu
 
 使用的读文件方法都是read，这样可以利用erlang的async thread，如果使用raw，它使用scheduler线程调用read,而且非常依赖GC，内存占用高，还可能导致整个scheduler卡住。
 
-Go读文件直接调用了syscall，和erlang中的raw模式是一致的，
+Go读文件直接调用了syscall，和erlang中的raw模式是一致的
+
+我关于read和raw的行为的理解，要感谢bhuztez带来的指点，thank you!
 
 https://github.com/qiniu/qetag
 
