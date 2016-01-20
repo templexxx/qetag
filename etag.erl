@@ -126,27 +126,10 @@ combine_sha1(SHA1_bin, [H|T]) ->
 -spec encode_mime(
     binary() | iolist()
 ) -> binary().
-
 encode_mime(Bin) when is_binary(Bin) ->
     << << (urlencode_digit(D)) >> || <<D>> <= base64:encode(Bin) >>;
 encode_mime(L) when is_list(L) ->
     encode_mime(iolist_to_binary(L)).
-
-
--spec decode(
-    binary() | iolist()
-) -> binary().
-
-decode(Bin) when is_binary(Bin) ->
-    Bin2 = case byte_size(Bin) rem 4 of
-               % 1 -> << Bin/binary, "===" >>;
-               2 -> << Bin/binary, "==" >>;
-               3 -> << Bin/binary, "=" >>;
-               _ -> Bin
-           end,
-    base64:decode(<< << (urldecode_digit(D)) >> || <<D>> <= Bin2 >>);
-decode(L) when is_list(L) ->
-    decode(iolist_to_binary(L)).
 
 
 urlencode_digit($/) -> $_;
@@ -154,17 +137,8 @@ urlencode_digit($+) -> $-;
 urlencode_digit(D)  -> D.
 
 
-urldecode_digit($_) -> $/;
-urldecode_digit($-) -> $+;
-urldecode_digit(D)  -> D.
-
-
 urlsafe_base64_encode(Data) ->
     binary:bin_to_list(encode_mime(Data)).
-
-
-urlsafe_base64_decode(Data) ->
-    binary:bin_to_list(decode(Data)).
 
 
 %%% qetag2 %%%
