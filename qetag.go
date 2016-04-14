@@ -8,7 +8,6 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"runtime"
-	//"sync/atomic"
 	"time"
 )
 
@@ -73,9 +72,9 @@ func SmallEtag(file io.Reader, sha1Buf []byte) ([]byte) {
 	return sha1Buf
 }
 
-func StartWorker(file io.ReaderAt, jobs chan int, resultChan chan map[int][]byte) {
+func StartWorker(file io.ReaderAt, jobs <-chan int, resultChan chan <-map[int][]byte) {
 	for j := range jobs {
-		data := io.NewSectionReader(file, int64(j) * BLOCK_SIZE, int64(BLOCK_SIZE))
+		data := io.NewSectionReader(file, int64(j) * BLOCK_SIZE, BLOCK_SIZE)
 		sha1Bytes := CalSha1(nil, data)
 		resultChan <- map[int][]byte{
 			j: sha1Bytes,
@@ -99,24 +98,30 @@ func BigEtag(file io.ReaderAt, sha1Buf []byte, blocks int64) []byte {
 	}
 	close(jobs)
 
-	blockSha1Map := make(map[int][]byte, 0)
+	final := combiSha1(resultChan, blocks)
+	return final
+}
+
+func combiSha1(resultChan chan map[int][]byte, blocks int64) []byte{
+	Sha1Map := make(map[int][]byte, 0)
+
 	for a := 0; a < int(blocks); a++ {
 		eachChan := <-resultChan
 		for k, v := range eachChan {
-			blockSha1Map[k] = v
+			Sha1Map[k] = v
 		}
 
 	}
-	blockSha1Bytes := make([]byte, 0, blocks * 20)
+	blockSha1 := make([]byte, 0, blocks * 20)
 	for i := 0; int64(i) < blocks; i++ {
-		blockSha1Bytes = append(blockSha1Bytes, blockSha1Map[i]...)
+		blockSha1 = append(blockSha1, Sha1Map[i]...)
 	}
 
-	finalSha1Bytes := make([]byte, 0, 21)
-	finalSha1Bytes = append(finalSha1Bytes, 0x96)
-	finalSha1Bytes = CalSha1(finalSha1Bytes, bytes.NewReader(blockSha1Bytes))
+	final := make([]byte, 0, 21)
+	final = append(final, 0x96)
+	final = CalSha1(final, bytes.NewReader(blockSha1))
 
-	return finalSha1Bytes
+	return final
 }
 
 func CalSha1(b []byte, r io.Reader) ([]byte) {
