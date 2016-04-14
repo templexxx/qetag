@@ -30,7 +30,6 @@ func main() {
 	fmt.Println(etag)
 	duration := time.Since(ts)
 	fmt.Println(duration.String())
-	//fmt.Println(inPool)
 }
 
 func GetEtag(filename string) (etag string, err error) {
